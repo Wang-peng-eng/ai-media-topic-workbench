@@ -546,7 +546,10 @@ function loadState() {
         activeTopicId: workflow.topics.find((item) => item.id === saved.activeTopicId)?.id || workflow.topics[0]?.id,
         activeModule: saved.activeModule || "emotion",
         savedItems: Array.isArray(saved.savedItems) ? saved.savedItems : [],
-        publishQueue: Array.isArray(saved.publishQueue) ? saved.publishQueue : []
+        publishQueue: Array.isArray(saved.publishQueue) ? saved.publishQueue : [],
+        todayDone: saved.todayDone || 0,
+        streakDays: saved.streakDays || 1,
+        verifiedTopics: saved.verifiedTopics || 0
       };
     }
   } catch {
@@ -559,7 +562,10 @@ function loadState() {
     activeTopicId: workflow.topics[0]?.id,
     activeModule: "emotion",
     savedItems: [],
-    publishQueue: []
+    publishQueue: [],
+    todayDone: 0,
+    streakDays: 1,
+    verifiedTopics: 0
   };
 }
 
@@ -568,6 +574,8 @@ function App() {
   const activeTopic = state.workflow.topics.find((item) => item.id === state.activeTopicId) || state.workflow.topics[0];
   const activeModule = promptModules.find((item) => item.id === state.activeModule) || promptModules[0];
   const activePrompt = buildPrompt(activeModule, state.brief);
+  const [executionMode, setExecutionMode] = React.useState(false);
+  const [executionStep, setExecutionStep] = React.useState("title");
 
   React.useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -619,6 +627,21 @@ function App() {
     }));
   }
 
+  function startExecution() {
+    setExecutionMode(true);
+    setExecutionStep("title");
+  }
+
+  function markTodayDone() {
+    setState((current) => ({
+      ...current,
+      todayDone: (current.todayDone || 0) + 1,
+      streakDays: Math.max(current.streakDays || 1, 1),
+      verifiedTopics: (current.verifiedTopics || 0) + 1
+    }));
+    setExecutionMode(false);
+  }
+
   return (
     <div className="min-h-screen bg-ink text-text">
       <header className="sticky top-0 z-30 border-b border-line bg-ink/95 backdrop-blur">
@@ -644,11 +667,19 @@ function App() {
         <BriefPanel brief={state.brief} updateBrief={updateBrief} />
 
         <section className="min-w-0 space-y-4">
-          <DailyMainline workflow={state.workflow} />
+          <DailyMainline workflow={state.workflow} stats={state} startExecution={startExecution} />
           <OperationPipeline pipeline={state.workflow.nextStep.pipeline} />
-          <StrategyDashboard workflow={state.workflow} activeTopic={activeTopic} />
+          {executionMode && (
+            <ExecutionMode
+              workflow={state.workflow}
+              step={executionStep}
+              setStep={setExecutionStep}
+              markTodayDone={markTodayDone}
+            />
+          )}
           <ActionClosure workflow={state.workflow} />
           <ContentResult workflow={state.workflow} saveCurrent={saveCurrent} addToQueue={addToQueue} />
+          <StrategyDashboard workflow={state.workflow} activeTopic={activeTopic} />
           <PromptWorkflow
             activeModule={state.activeModule}
             activePrompt={activePrompt}
@@ -722,23 +753,38 @@ function BriefPanel({ brief, updateBrief }) {
   );
 }
 
-function DailyMainline({ workflow }) {
+function DailyMainline({ workflow, stats, startExecution }) {
   const mainline = workflow.nextStep.dailyMainline;
   return (
-    <section className="rounded-lg border border-cyan/30 bg-cyan/10 p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
+    <section className="rounded-lg border border-cyan/30 bg-cyan/10 p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold text-cyan">今日推荐主线</p>
-          <h2 className="mt-1 text-lg font-semibold leading-7">{mainline.priority}</h2>
+          <h2 className="mt-1 text-2xl font-semibold leading-8">今天先完成这 1 条就行</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">{mainline.instruction}</p>
         </div>
-        <span className="rounded border border-cyan/40 bg-ink/30 px-3 py-2 text-xs text-cyan">AI运营副驾驶</span>
+        <button onClick={startExecution} className="shrink-0 rounded-md bg-cyan px-4 py-2 text-sm font-semibold text-ink hover:bg-teal-300">
+          开始执行
+        </button>
       </div>
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <SmallMeta label="今日最适合发的内容" value={mainline.topic} />
-        <SmallMeta label="最容易起量的话题" value={mainline.easiestGrowthTopic} />
+        <SmallMeta label="推荐理由" value={workflow.metrics.reason} />
         <SmallMeta label="当前最值得跟进的情绪" value={mainline.emotionToFollow} />
+        <SmallMeta label="建议发布时间" value={workflow.actionPlan.publishTime} />
+        <SmallMeta label="建议形式 / 难度" value={`${workflow.actionPlan.contentForm} · ${workflow.nextStep.execution.level}`} />
       </div>
-      <p className="mt-3 rounded-md border border-cyan/30 bg-ink/30 px-3 py-2 text-sm leading-6 text-text">{mainline.instruction}</p>
+      <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <SmallMeta label="今日已完成" value={`${stats.todayDone || 0} 条`} />
+        <SmallMeta label="连续运营天数" value={`${stats.streakDays || 1} 天`} />
+        <SmallMeta label="待发布内容" value={`${stats.publishQueue?.length || 0} 条`} />
+        <SmallMeta label="已验证选题" value={`${stats.verifiedTopics || 0} 个`} />
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted">
+        {["不需要一次做完", "今天先测试反馈", "收藏比点赞更重要", "先写出一条，再优化下一条"].map((tip) => (
+          <span key={tip} className="rounded border border-cyan/30 bg-ink/30 px-2 py-1">{tip}</span>
+        ))}
+      </div>
     </section>
   );
 }
@@ -759,6 +805,67 @@ function OperationPipeline({ pipeline }) {
             </div>
           </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function ExecutionMode({ workflow, step, setStep, markTodayDone }) {
+  const steps = [
+    { id: "title", label: "开始写标题" },
+    { id: "hook", label: "开始写开头" },
+    { id: "structure", label: "开始写结构" },
+    { id: "check", label: "发布检查" }
+  ];
+  const content = {
+    title: {
+      title: "先选一个标题",
+      body: workflow.titles.long[0],
+      tip: "不用纠结完美标题，先选一个最像真人说话的版本。"
+    },
+    hook: {
+      title: "写开头第一句",
+      body: workflow.structure.hook,
+      tip: "开头只做一件事：让用户觉得“这说的是我”。"
+    },
+    structure: {
+      title: "按 4 步写正文",
+      body: workflow.structure.sections.join("\n"),
+      tip: "每一段只讲一个意思，不需要写长。"
+    },
+    check: {
+      title: "发布前检查",
+      body: workflow.publish.checklist.join("\n"),
+      tip: "检查通过后就加入待发布，先测试反馈。"
+    }
+  }[step];
+
+  return (
+    <section className="rounded-lg border border-cyan/30 bg-panel p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold">内容执行模式</h2>
+          <p className="mt-1 text-xs text-muted">一步一步做，不需要一次完成所有内容。</p>
+        </div>
+        <button onClick={markTodayDone} className="rounded-md border border-cyan/40 px-3 py-2 text-xs text-cyan hover:bg-cyan/10">
+          标记今日完成
+        </button>
+      </div>
+      <div className="mb-3 grid gap-2 md:grid-cols-4">
+        {steps.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => setStep(item.id)}
+            className={`rounded-md border px-3 py-2 text-xs ${step === item.id ? "border-cyan bg-cyan text-ink font-semibold" : "border-line bg-panel2 text-muted hover:text-text"}`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <div className="rounded-md border border-line bg-panel2 p-4">
+        <p className="mb-2 text-xs font-semibold text-cyan">{content.title}</p>
+        <pre className="whitespace-pre-wrap text-sm leading-7 text-text">{content.body}</pre>
+        <p className="mt-3 rounded border border-line bg-panel3 px-3 py-2 text-xs leading-5 text-muted">{content.tip}</p>
       </div>
     </section>
   );
