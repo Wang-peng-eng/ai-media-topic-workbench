@@ -652,8 +652,8 @@ function App() {
               <Workflow size={19} />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-base font-semibold">AI新媒体选题工作台</h1>
-              <p className="truncate text-xs text-muted">选题分析 · 情绪拆解 · 标题生成 · 爆款拆解 · 待发布内容池</p>
+              <h1 className="truncate text-base font-semibold">AI运营陪跑台</h1>
+              <p className="truncate text-xs text-muted">今日主线 · 开始执行 · 内容推进 · 待发布任务</p>
             </div>
           </div>
           <div className="hidden gap-2 text-xs text-muted md:flex">
@@ -664,12 +664,13 @@ function App() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-4 px-4 py-4 lg:grid-cols-[320px_minmax(0,1fr)_330px]">
-        <BriefPanel brief={state.brief} updateBrief={updateBrief} />
+      <main className="mx-auto max-w-7xl space-y-4 px-4 py-4">
+        <DailyMainline workflow={state.workflow} stats={state} startExecution={startExecution} />
 
-        <section className="min-w-0 space-y-4">
-          <DailyMainline workflow={state.workflow} stats={state} startExecution={startExecution} />
-          <OperationPipeline pipeline={state.workflow.nextStep.pipeline} />
+        <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)_300px]">
+          <BriefPanel brief={state.brief} updateBrief={updateBrief} />
+
+          <section className="min-w-0 space-y-4">
           {executionMode && (
             <ExecutionMode
               workflow={state.workflow}
@@ -701,9 +702,10 @@ function App() {
               />
             </>
           )}
-        </section>
+          </section>
 
-        <QueuePanel savedItems={state.savedItems} publishQueue={state.publishQueue} addToQueue={addToQueue} removeQueue={removeQueue} updateQueueStatus={updateQueueStatus} />
+          <QueuePanel savedItems={state.savedItems} publishQueue={state.publishQueue} addToQueue={addToQueue} removeQueue={removeQueue} updateQueueStatus={updateQueueStatus} />
+        </div>
       </main>
     </div>
   );
@@ -712,8 +714,8 @@ function App() {
 function BriefPanel({ brief, updateBrief }) {
   const industry = industries[brief.industry] || industries.aiLearning;
   return (
-    <aside className="space-y-4">
-      <section className="rounded-lg border border-line bg-panel p-4 shadow-workbench">
+    <aside className="space-y-4 opacity-90">
+      <section className="rounded-lg border border-line bg-panel/80 p-4">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold">输入信息</h2>
           <Sparkles size={16} className="text-cyan" />
@@ -751,7 +753,7 @@ function BriefPanel({ brief, updateBrief }) {
         </div>
       </section>
 
-      <section className="rounded-lg border border-line bg-panel p-4">
+      <section className="rounded-lg border border-line bg-panel/70 p-4">
         <h2 className="mb-3 text-sm font-semibold">行业风格</h2>
         <p className="text-sm leading-6 text-muted">{industry.tone}</p>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -766,35 +768,57 @@ function BriefPanel({ brief, updateBrief }) {
 
 function DailyMainline({ workflow, stats, startExecution }) {
   const mainline = workflow.nextStep.dailyMainline;
+  const progress = workflow.completion?.percent || 0;
+  const currentStage = workflow.nextStep.pipeline.find((step) => !step.done)?.label || "待发布";
   return (
-    <section className="rounded-lg border border-cyan/30 bg-cyan/10 p-5">
-      <div className="mb-4 flex items-start justify-between gap-3">
+    <section className="rounded-xl border border-cyan/40 bg-cyan/10 p-6 shadow-workbench">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div>
-          <p className="text-xs font-semibold text-cyan">今日推荐主线</p>
-          <h2 className="mt-1 text-2xl font-semibold leading-8">今天先完成这 1 条就行</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">{mainline.instruction}</p>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="rounded border border-cyan/40 bg-ink/40 px-2 py-1 text-xs font-semibold text-cyan">今日运营主线</span>
+            <span className="rounded border border-line bg-ink/30 px-2 py-1 text-xs text-muted">当前阶段：{currentStage}</span>
+          </div>
+          <h2 className="max-w-4xl text-3xl font-semibold leading-10 md:text-4xl">今天先完成这 1 条内容</h2>
+          <p className="mt-4 max-w-3xl text-base leading-7 text-muted">{mainline.topic}</p>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <SmallMeta label="推荐理由" value={workflow.metrics.reason} />
+            <SmallMeta label="建议动作" value={mainline.instruction} />
+            <SmallMeta label="执行难度" value={`${workflow.nextStep.execution.level} · ${workflow.nextStep.execution.tags.slice(0, 2).join(" / ")}`} />
+            <SmallMeta label="建议形式" value={`${workflow.actionPlan.contentForm}，${workflow.actionPlan.publishTime} 发`} />
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <button onClick={startExecution} className="rounded-md bg-cyan px-5 py-3 text-sm font-semibold text-ink hover:bg-teal-300">
+              开始执行
+            </button>
+            <span className="text-sm text-muted">不用一次做完，先写出一条能发布的内容。</span>
+          </div>
         </div>
-        <button onClick={startExecution} className="shrink-0 rounded-md bg-cyan px-4 py-2 text-sm font-semibold text-ink hover:bg-teal-300">
-          开始执行
-        </button>
-      </div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <SmallMeta label="今日最适合发的内容" value={mainline.topic} />
-        <SmallMeta label="推荐理由" value={workflow.metrics.reason} />
-        <SmallMeta label="当前最值得跟进的情绪" value={mainline.emotionToFollow} />
-        <SmallMeta label="建议发布时间" value={workflow.actionPlan.publishTime} />
-        <SmallMeta label="建议形式 / 难度" value={`${workflow.actionPlan.contentForm} · ${workflow.nextStep.execution.level}`} />
-      </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-4">
-        <SmallMeta label="今日已完成" value={`${stats.todayDone || 0} 条`} />
-        <SmallMeta label="连续运营天数" value={`${stats.streakDays || 1} 天`} />
-        <SmallMeta label="待发布内容" value={`${stats.publishQueue?.length || 0} 条`} />
-        <SmallMeta label="已验证选题" value={`${stats.verifiedTopics || 0} 个`} />
-      </div>
-      <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted">
-        {["不需要一次做完", "今天先测试反馈", "收藏比点赞更重要", "先写出一条，再优化下一条"].map((tip) => (
-          <span key={tip} className="rounded border border-cyan/30 bg-ink/30 px-2 py-1">{tip}</span>
-        ))}
+
+        <div className="rounded-lg border border-line bg-ink/35 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-semibold">内容推进</p>
+            <span className="text-sm font-semibold text-cyan">{progress}%</span>
+          </div>
+          <div className="mb-4 h-2 rounded bg-panel3">
+            <div className="h-2 rounded bg-cyan" style={{ width: `${progress}%` }} />
+          </div>
+          <div className="space-y-2">
+            {workflow.nextStep.pipeline.map((step, index) => (
+              <div key={step.label} className={`flex items-center justify-between rounded border px-3 py-2 text-xs ${step.done ? "border-cyan/40 bg-cyan/10 text-cyan" : "border-line bg-panel2 text-muted"}`}>
+                <span>{index + 1}. {step.label}</span>
+                <span>{step.done ? "完成" : "下一步"}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+            <div className="rounded border border-line bg-panel2 p-2"><p className="text-muted">今日</p><p className="mt-1 text-text">{stats.todayDone || 0} 条</p></div>
+            <div className="rounded border border-line bg-panel2 p-2"><p className="text-muted">连续</p><p className="mt-1 text-text">{stats.streakDays || 1} 天</p></div>
+            <div className="rounded border border-line bg-panel2 p-2"><p className="text-muted">待发</p><p className="mt-1 text-text">{stats.publishQueue?.length || 0} 条</p></div>
+          </div>
+          <div className="mt-4 rounded border border-cyan/30 bg-cyan/10 px-3 py-2 text-xs leading-5 text-text">
+            低压力提示：先测试反馈，收藏比点赞更重要。
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -1279,8 +1303,8 @@ function TopicWorkspace({ topics, activeTopicId, workflow, selectTopic, saveCurr
 
 function QueuePanel({ savedItems, publishQueue, addToQueue, removeQueue, updateQueueStatus }) {
   return (
-    <aside className="space-y-4">
-      <section className="rounded-lg border border-line bg-panel p-4">
+    <aside className="space-y-4 opacity-90">
+      <section className="rounded-lg border border-line bg-panel/80 p-4">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm font-semibold">
             <Archive size={16} className="text-cyan" />
@@ -1312,7 +1336,7 @@ function QueuePanel({ savedItems, publishQueue, addToQueue, removeQueue, updateQ
         </div>
       </section>
 
-      <section className="rounded-lg border border-line bg-panel p-4">
+      <section className="rounded-lg border border-line bg-panel/80 p-4">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm font-semibold">
             <Clock size={16} className="text-cyan" />
