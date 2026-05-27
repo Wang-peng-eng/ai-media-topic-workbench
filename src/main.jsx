@@ -576,6 +576,7 @@ function App() {
   const activePrompt = buildPrompt(activeModule, state.brief);
   const [executionMode, setExecutionMode] = React.useState(false);
   const [executionStep, setExecutionStep] = React.useState("title");
+  const [showAnalysis, setShowAnalysis] = React.useState(false);
 
   React.useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -677,24 +678,29 @@ function App() {
               markTodayDone={markTodayDone}
             />
           )}
-          <ActionClosure workflow={state.workflow} />
-          <ContentResult workflow={state.workflow} saveCurrent={saveCurrent} addToQueue={addToQueue} />
-          <StrategyDashboard workflow={state.workflow} activeTopic={activeTopic} />
-          <PromptWorkflow
-            activeModule={state.activeModule}
-            activePrompt={activePrompt}
-            workflow={state.workflow}
-            runModule={runModule}
-          />
-          <ViralPanel viralText={state.brief.viralText} updateBrief={updateBrief} viral={state.workflow.viral} />
-          <TopicWorkspace
-            topics={state.workflow.topics}
-            activeTopicId={state.activeTopicId}
-            workflow={state.workflow}
-            selectTopic={selectTopic}
-            saveCurrent={saveCurrent}
-            addToQueue={addToQueue}
-          />
+          {executionMode && <ContentResult workflow={state.workflow} saveCurrent={saveCurrent} addToQueue={addToQueue} />}
+          <AnalysisToggle showAnalysis={showAnalysis} setShowAnalysis={setShowAnalysis} />
+          {showAnalysis && (
+            <>
+              <ActionClosure workflow={state.workflow} />
+              <StrategyDashboard workflow={state.workflow} activeTopic={activeTopic} />
+              <PromptWorkflow
+                activeModule={state.activeModule}
+                activePrompt={activePrompt}
+                workflow={state.workflow}
+                runModule={runModule}
+              />
+              <ViralPanel viralText={state.brief.viralText} updateBrief={updateBrief} viral={state.workflow.viral} />
+              <TopicWorkspace
+                topics={state.workflow.topics}
+                activeTopicId={state.activeTopicId}
+                workflow={state.workflow}
+                selectTopic={selectTopic}
+                saveCurrent={saveCurrent}
+                addToQueue={addToQueue}
+              />
+            </>
+          )}
         </section>
 
         <QueuePanel savedItems={state.savedItems} publishQueue={state.publishQueue} addToQueue={addToQueue} removeQueue={removeQueue} updateQueueStatus={updateQueueStatus} />
@@ -728,15 +734,20 @@ function BriefPanel({ brief, updateBrief }) {
               {Object.keys(platformProfiles).map((item) => <option key={item}>{item}</option>)}
             </select>
           </Field>
-          <Field label="目标用户">
-            <input value={brief.audience} onChange={(event) => updateBrief("audience", event.target.value)} />
-          </Field>
-          <Field label="当前推广方向">
-            <textarea value={brief.direction} onChange={(event) => updateBrief("direction", event.target.value)} rows={3} />
-          </Field>
           <Field label="今日热点 / 看到的内容">
             <textarea value={brief.hotTopic} onChange={(event) => updateBrief("hotTopic", event.target.value)} rows={3} />
           </Field>
+          <details className="rounded-md border border-line bg-panel2 p-3">
+            <summary className="cursor-pointer text-xs text-muted">补充信息（可不填）</summary>
+            <div className="mt-3 space-y-3">
+              <Field label="目标用户">
+                <input value={brief.audience} onChange={(event) => updateBrief("audience", event.target.value)} />
+              </Field>
+              <Field label="当前推广方向">
+                <textarea value={brief.direction} onChange={(event) => updateBrief("direction", event.target.value)} rows={3} />
+              </Field>
+            </div>
+          </details>
         </div>
       </section>
 
@@ -805,6 +816,25 @@ function OperationPipeline({ pipeline }) {
             </div>
           </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function AnalysisToggle({ showAnalysis, setShowAnalysis }) {
+  return (
+    <section className="rounded-lg border border-line bg-panel p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold">辅助分析</h2>
+          <p className="mt-1 text-xs text-muted">默认先执行。需要换选题、看风险、拆爆款时再展开。</p>
+        </div>
+        <button
+          onClick={() => setShowAnalysis(!showAnalysis)}
+          className="rounded-md border border-line px-3 py-2 text-xs text-text hover:bg-panel2"
+        >
+          {showAnalysis ? "收起分析" : "展开分析"}
+        </button>
       </div>
     </section>
   );
