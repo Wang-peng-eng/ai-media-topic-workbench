@@ -258,8 +258,9 @@ function generateWorkflow(brief, selectedTopic = null) {
   const risks = generateRiskJudgement(topic, brief, industry, titles, structure, metrics);
   const completion = generateCompletion(topic, titles, structure, publish, metrics);
   const aiAdvice = generateAiAdvice(topic, brief, industry, metrics);
+  const nextStep = generateNextStepSystem(topic, brief, industry, metrics, actionPlan);
 
-  return { hotspot, emotion, viral, topics, titles, structure, publish, contentResult, metrics, actionPlan, risks, completion, aiAdvice };
+  return { hotspot, emotion, viral, topics, titles, structure, publish, contentResult, metrics, actionPlan, risks, completion, aiAdvice, nextStep };
 }
 
 function makeTopics(brief, industry) {
@@ -400,6 +401,56 @@ function generateActionPlan(topic, brief, industry, platform, publish, metrics) 
   };
 }
 
+function generateNextStepSystem(topic, brief, industry, metrics, actionPlan) {
+  const directPost = metrics.viralProbability >= 72 && metrics.emotionStrength >= 72;
+  const lowCost = brief.platform === "小红书" || actionPlan.contentForm.includes("图文");
+  const needsVideo = brief.platform === "抖音";
+  const seriesFit = metrics.contentTypes.some((item) => item.label === "收藏型内容" && item.active) || industry.angles.length >= 4;
+
+  return {
+    dailyMainline: {
+      priority: directPost ? "今日最适合直接发布" : "今日先优化再发布",
+      topic: topic.name,
+      easiestGrowthTopic: `${brief.hotTopic || industry.label} × ${topic.angle}`,
+      emotionToFollow: topic.emotion,
+      instruction: directPost
+        ? "先发图文版本，评论区收集问题，明天接着做同主题第二篇。"
+        : "先补一个真实场景或案例，把标题改得更像个人经验，再加入待发布。"
+    },
+    suggestedActions: [
+      directPost ? "直接发：当前情绪和选题都比较明确。" : "先收藏优化：补真实场景后再发。",
+      `内容形式：${actionPlan.contentForm}`,
+      metrics.viralProbability >= 76 ? "更适合新号：问题具体，容易建立第一批互动。" : "更适合老号：需要账号信任来承接观点。",
+      seriesFit ? "适合连续更新：可以拆成 3-5 篇系列。" : "不急着做系列：先用单篇测试反馈。",
+      `发布时间：${actionPlan.publishTime}`,
+      `评论区方向：${actionPlan.commentQuestion}`
+    ],
+    execution: {
+      level: needsVideo ? "中等执行" : "新手友好",
+      tags: [
+        lowCost ? "可低成本完成" : "需要素材准备",
+        needsVideo ? "需要真人出镜或录屏" : "不需要真人出镜",
+        needsVideo ? "需要简单剪辑" : "图文即可完成",
+        "适合新媒体新手"
+      ]
+    },
+    potential: [
+      { label: "收藏潜力", value: metrics.contentTypes.some((item) => item.label === "收藏型内容" && item.active) ? 86 : 66 },
+      { label: "评论潜力", value: metrics.contentTypes.some((item) => item.label === "评论型内容" && item.active) ? 82 : 62 },
+      { label: "转发潜力", value: metrics.contentTypes.some((item) => item.label === "转发型内容" && item.active) ? 78 : 55 },
+      { label: "涨粉潜力", value: seriesFit ? 76 : 58 },
+      { label: "系列潜力", value: seriesFit ? 88 : 60 }
+    ],
+    pipeline: [
+      { label: "分析", done: true },
+      { label: "选题", done: Boolean(topic.name) },
+      { label: "内容", done: metrics.viralProbability >= 60 },
+      { label: "待发布", done: directPost },
+      { label: "已发布", done: false }
+    ]
+  };
+}
+
 function generateRiskJudgement(topic, brief, industry, titles, structure, metrics) {
   const joined = `${titles.long.join(" ")} ${structure.hook} ${structure.sections.join(" ")}`;
   const riskRules = [
@@ -475,6 +526,7 @@ function makePoolItem(current, topic, status) {
     risks: current.workflow.risks,
     completion: current.workflow.completion,
     aiAdvice: current.workflow.aiAdvice,
+    nextStep: current.workflow.nextStep,
     taskStatus: status === "待发布" ? "待发布" : "待优化",
     publishTime: current.workflow.actionPlan.publishTime,
     contentDirection: topic.angle,
@@ -592,6 +644,8 @@ function App() {
         <BriefPanel brief={state.brief} updateBrief={updateBrief} />
 
         <section className="min-w-0 space-y-4">
+          <DailyMainline workflow={state.workflow} />
+          <OperationPipeline pipeline={state.workflow.nextStep.pipeline} />
           <StrategyDashboard workflow={state.workflow} activeTopic={activeTopic} />
           <ActionClosure workflow={state.workflow} />
           <ContentResult workflow={state.workflow} saveCurrent={saveCurrent} addToQueue={addToQueue} />
@@ -665,6 +719,48 @@ function BriefPanel({ brief, updateBrief }) {
         </div>
       </section>
     </aside>
+  );
+}
+
+function DailyMainline({ workflow }) {
+  const mainline = workflow.nextStep.dailyMainline;
+  return (
+    <section className="rounded-lg border border-cyan/30 bg-cyan/10 p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold text-cyan">今日推荐主线</p>
+          <h2 className="mt-1 text-lg font-semibold leading-7">{mainline.priority}</h2>
+        </div>
+        <span className="rounded border border-cyan/40 bg-ink/30 px-3 py-2 text-xs text-cyan">AI运营副驾驶</span>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <SmallMeta label="今日最适合发的内容" value={mainline.topic} />
+        <SmallMeta label="最容易起量的话题" value={mainline.easiestGrowthTopic} />
+        <SmallMeta label="当前最值得跟进的情绪" value={mainline.emotionToFollow} />
+      </div>
+      <p className="mt-3 rounded-md border border-cyan/30 bg-ink/30 px-3 py-2 text-sm leading-6 text-text">{mainline.instruction}</p>
+    </section>
+  );
+}
+
+function OperationPipeline({ pipeline }) {
+  return (
+    <section className="rounded-lg border border-line bg-panel p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold">从分析到发布</h2>
+        <span className="text-xs text-muted">运营推进链路</span>
+      </div>
+      <div className="grid grid-cols-5 gap-2">
+        {pipeline.map((step, index) => (
+          <div key={step.label} className="min-w-0">
+            <div className={`h-2 rounded ${step.done ? "bg-cyan" : "bg-panel3"}`} />
+            <div className={`mt-2 rounded border px-2 py-2 text-center text-xs ${step.done ? "border-cyan/40 bg-cyan/10 text-cyan" : "border-line bg-panel2 text-muted"}`}>
+              {index + 1}. {step.label}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -749,9 +845,24 @@ function ActionClosure({ workflow }) {
           <p className="text-xs font-semibold text-cyan">下一步动作</p>
           <p className="mt-1 text-xs leading-5 text-text">{workflow.actionPlan.nextStep}</p>
         </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <OutputList title="建议动作" items={workflow.nextStep.suggestedActions} />
+          <div>
+            <p className="mb-2 text-xs font-semibold text-cyan">执行难度</p>
+            <div className="rounded-md border border-line bg-panel2 p-3">
+              <p className="mb-3 text-sm font-semibold text-text">{workflow.nextStep.execution.level}</p>
+              <div className="flex flex-wrap gap-2">
+                {workflow.nextStep.execution.tags.map((tag) => (
+                  <span key={tag} className="rounded border border-line px-2 py-1 text-xs text-muted">{tag}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-4">
+        <PotentialCard potential={workflow.nextStep.potential} />
         <CompletionCard completion={workflow.completion} />
         <RiskCard risks={workflow.risks} />
       </div>
@@ -788,6 +899,27 @@ function CompletionCard({ completion }) {
           <div key={item.label} className="flex items-center justify-between rounded border border-line bg-panel2 px-3 py-2 text-xs">
             <span className={item.done ? "text-text" : "text-muted"}>{item.label}</span>
             <span className={item.done ? "text-cyan" : "text-muted"}>{item.done ? "完成" : "待补"}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PotentialCard({ potential }) {
+  return (
+    <section className="rounded-lg border border-line bg-panel p-4">
+      <h2 className="mb-3 text-sm font-semibold">内容潜力判断</h2>
+      <div className="space-y-3">
+        {potential.map((item) => (
+          <div key={item.label}>
+            <div className="mb-1 flex items-center justify-between text-xs">
+              <span className="text-muted">{item.label}</span>
+              <span className="text-text">{item.value}%</span>
+            </div>
+            <div className="h-2 rounded bg-panel3">
+              <div className="h-2 rounded bg-cyan" style={{ width: `${item.value}%` }} />
+            </div>
           </div>
         ))}
       </div>
@@ -1082,6 +1214,12 @@ function QueuePanel({ savedItems, publishQueue, addToQueue, removeQueue, updateQ
               <p className="text-xs leading-5 text-muted">标题：{item.titles.long[0]}</p>
               <p className="mt-2 text-xs leading-5 text-muted">发布时间：{item.publishTime || item.publish.time}</p>
               {item.metrics && <p className="mt-2 text-xs leading-5 text-cyan">爆款概率：{item.metrics.viralProbability}% · 情绪强度：{item.metrics.emotionStrength}</p>}
+              {item.nextStep && (
+                <div className="mt-2 rounded border border-line bg-panel3 p-2">
+                  <p className="text-xs font-semibold text-cyan">下一步</p>
+                  <p className="mt-1 text-xs leading-5 text-muted">{item.nextStep.dailyMainline.instruction}</p>
+                </div>
+              )}
             </article>
           ))}
         </div>
